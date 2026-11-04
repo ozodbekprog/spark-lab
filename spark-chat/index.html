@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spark Chat — DGX</title>
+<style>
+  :root {
+    --bg: #121212;
+    --panel: #191919;
+    --panel-2: #202020;
+    --line: #2c2c2c;
+    --text: #ece9e2;
+    --muted: #9a958a;
+    --gold: #d9b45b;
+    --gold-dim: #8a7438;
+    --danger: #c96a5b;
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background:
+      radial-gradient(1200px 600px at 50% -10%, rgba(217,180,91,.06), transparent 60%),
+      var(--bg);
+    color: var(--text);
+    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+  }
+  header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--line);
+    background: rgba(18,18,18,.92);
+    backdrop-filter: blur(8px);
+    position: sticky; top: 0; z-index: 5;
+  }
+  .brand {
+    font-family: ui-serif, Georgia, "Times New Roman", serif;
+    font-size: 19px;
+    letter-spacing: .3px;
+    white-space: nowrap;
+  }
+  .brand b { color: var(--gold); font-weight: 600; }
+  .status {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--muted);
+    transition: background .3s;
+    flex: none;
+  }
+  .status.online { background: #6fbf8f; box-shadow: 0 0 0 4px rgba(111,191,143,.12); }
+  .status.offline { background: var(--danger); box-shadow: 0 0 0 4px rgba(201,106,91,.12); }
+  .grow { flex: 1; }
+  select, button, textarea { font: inherit; color: inherit; }
+  select {
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 9px 34px 9px 12px;
+    max-width: 380px;
+    outline: none;
+    appearance: none;
+    background-image: linear-gradient(45deg, transparent 50%, var(--gold) 50%), linear-gradient(135deg, var(--gold) 50%, transparent 50%);
+    background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%;
+    background-size: 5px 5px, 5px 5px;
+    background-repeat: no-repeat;
+    cursor: pointer;
+  }
+  select:focus { border-color: var(--gold-dim); }
+  .icon-btn {
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 8px 12px;
+    cursor: pointer;
+    color: var(--muted);
+    transition: color .2s, border-color .2s;
+  }
+  .icon-btn:hover { color: var(--text); border-color: var(--gold-dim); }
+
+  main {
+    flex: 1;
+    overflow-y: auto;
+    scroll-behavior: smooth;
+  }
+  .thread {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 26px 20px 140px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+  .empty {
+    margin: 12vh auto 0;
+    text-align: center;
+    max-width: 460px;
+    color: var(--muted);
+    animation: rise .5s ease both;
+  }
+  .empty h1 {
+    font-family: ui-serif, Georgia, serif;
+    font-weight: 500;
+    font-size: 30px;
+    color: var(--text);
+    margin: 0 0 10px;
+  }
+  .empty p { margin: 0; font-size: 14px; }
+  .hint {
+    margin-top: 22px;
+    font-size: 12.5px;
+    color: #6f6a5f;
+  }
+  .msg {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    animation: rise .28s ease both;
+  }
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: none; }
+  }
+  .msg .who {
+    font-size: 11.5px;
+    letter-spacing: .8px;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .bubble {
+    border: 1px solid var(--line);
+    background: var(--panel);
+    border-radius: var(--radius);
+    padding: 13px 16px;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+  .msg.user { align-items: flex-end; }
+  .msg.user .bubble {
+    background: linear-gradient(180deg, #262218, #201d15);
+    border-color: #3a3322;
+  }
+  .msg.user .who { color: var(--gold-dim); }
+  .bubble p { margin: 0 0 10px; }
+  .bubble p:last-child { margin-bottom: 0; }
+  .bubble pre {
+    background: #0e0e0e;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 12px 14px;
+    overflow-x: auto;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .bubble code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 13px;
+    background: #0e0e0e;
+    padding: 2px 5px;
+    border-radius: 5px;
+  }
+  .bubble pre code { background: none; padding: 0; }
+  .bubble ul { margin: 0 0 10px; padding-left: 20px; }
+  .bubble li { margin: 3px 0; }
+  .bubble hr { border: 0; border-top: 1px solid var(--line); margin: 12px 0; }
+  .thinking {
+    border: 1px dashed #333;
+    border-radius: 10px;
+    padding: 8px 12px;
+    margin-bottom: 10px;
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .thinking summary { cursor: pointer; color: var(--gold-dim); }
+  .thinking .body { margin-top: 8px; white-space: pre-wrap; }
+  .meta {
+    font-size: 11.5px;
+    color: #6f6a5f;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .meta .gold { color: var(--gold-dim); }
+  .cursor {
+    display: inline-block;
+    width: 7px; height: 16px;
+    background: var(--gold);
+    vertical-align: -3px;
+    animation: blink 1s steps(2) infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  .composer-wrap {
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    padding: 14px 20px 18px;
+    background: linear-gradient(180deg, transparent, rgba(18,18,18,.96) 30%);
+  }
+  .composer {
+    max-width: 900px;
+    margin: 0 auto;
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 10px 10px 10px 16px;
+    transition: border-color .2s;
+  }
+  .composer:focus-within { border-color: var(--gold-dim); }
+  .composer textarea {
+    flex: 1;
+    resize: none;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    max-height: 180px;
+    min-height: 26px;
+    padding: 4px 0;
+    line-height: 1.5;
+  }
+  .send {
+    border: 1px solid var(--gold-dim);
+    background: linear-gradient(180deg, #e3c274, #c9a44f);
+    color: #1b1708;
+    font-weight: 600;
+    border-radius: 11px;
+    padding: 9px 16px;
+    cursor: pointer;
+    transition: transform .15s, filter .2s;
+    white-space: nowrap;
+  }
+  .send:hover { filter: brightness(1.06); }
+  .send:active { transform: translateY(1px); }
+  .send:disabled { opacity: .55; cursor: default; filter: none; }
+  .stop { background: transparent; color: var(--danger); border-color: #4a2b26; }
+  .note {
+    max-width: 900px;
+    margin: 8px auto 0;
+    text-align: center;
+    font-size: 11.5px;
+    color: #615c52;
+  }
+  @media (max-width: 640px) {
+    header { flex-wrap: wrap; gap: 10px; }
+    select { max-width: 100%; flex: 1; }
+    .brand { font-size: 17px; }
+    .thread { padding: 18px 14px 150px; }
+    .empty h1 { font-size: 24px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">Spark <b>Chat</b></div>
+  <div class="status" id="status" title="Holat"></div>
+  <div class="grow"></div>
+  <select id="model" title="Model tanlash"></select>
+  <button class="icon-btn" id="clear" title="Yangi suhbat">Tozalash</button>
+</header>
+
+<main id="scroller">
+  <div class="thread" id="thread">
+    <div class="empty" id="empty">
+      <h1>DGX Spark bilan suhbat</h1>
+      <p>Modelni tanlang va yozing. Javob to'g'ridan-to'g'ri Spark'dagi Ollama'dan, tailnet orqali keladi.</p>
+      <div class="hint">Birinchi javob 10–20 soniya kutishi mumkin — model xotiraga yuklanadi.</div>
+    </div>
+  </div>
+</main>
+
+<div class="composer-wrap">
+  <div class="composer">
+    <textarea id="input" rows="1" placeholder="Xabar yozing... (Enter — yuborish, Shift+Enter — yangi qator)"></textarea>
+    <button class="send" id="send">Yuborish</button>
+  </div>
+  <div class="note">API: http://100.120.238.79:11434 · faqat Tailscale ichida, autentifikatsiya yo'q</div>
+</div>
+
+<script>
+const API = 'http://100.120.238.79:11434';
+const LS_MODEL = 'sparkchat.model';
+const LS_HISTORY = 'sparkchat.history';
+const MAX_CONTEXT = 12;
+
+const $ = (id) => document.getElementById(id);
+const scroller = $('scroller');
+const thread = $('thread');
+const empty = $('empty');
+const modelSel = $('model');
+const input = $('input');
+const sendBtn = $('send');
+const statusEl = $('status');
+let history = [];
+let busy = false;
+let aborter = null;
+
+function setStatus(ok) {
+  statusEl.classList.toggle('online', ok);
+  statusEl.classList.toggle('offline', !ok);
+  statusEl.title = ok ? 'Spark online' : 'Spark javob bermayapti';
+}
+
+function fmtSize(bytes) { return (bytes / 1e9).toFixed(1) + ' GB'; }
+function esc(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// Xavfsiz minimal markdown
+function md(text) {
+  const blocks = [];
+  let s = text.replace(/```(\w*)\n?([\s\S]*?)```/g, (m, lang, code) => {
+    blocks.push('<pre><code>' + esc(code.replace(/\n$/, '')) + '</code></pre>');
+    return '\u0000' + (blocks.length - 1) + '\u0000';
+  });
+  s = esc(s);
+  s = s.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+  s = s.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
+  s = s.replace(/(^|\s)\*([^*\n]+)\*/g, '$1<i>$2</i>');
+  s = s.split(/\n{2,}/).map(par => {
+    const lines = par.split('\n');
+    if (lines.every(l => /^\s*[-*]\s+/.test(l))) {
+      return '<ul>' + lines.map(l => '<li>' + l.replace(/^\s*[-*]\s+/, '') + '</li>').join('') + '</ul>';
+    }
+    return '<p>' + lines.join('<br>') + '</p>';
+  }).join('');
+  s = s.replace(/\u0000(\d+)\u0000/g, (m, i) => blocks[+i]);
+  return s;
+}
+
+function saveHistory() {
+  try { localStorage.setItem(LS_HISTORY, JSON.stringify(history)); } catch (e) {}
+}
+function loadHistory() {
+  try {
+    const h = JSON.parse(localStorage.getItem(LS_HISTORY) || '[]');
+    if (Array.isArray(h)) history = h;
+  } catch (e) {}
+}
+
+function statLine(el, stats) {
+  const parts = [];
+  if (stats.tps) parts.push('<span class="gold">' + stats.tps.toFixed(1) + ' tok/s</span>');
+  if (stats.tokens) parts.push(stats.tokens + ' tok');
+  if (stats.seconds) parts.push(stats.seconds.toFixed(1) + ' s');
+  el.innerHTML = parts.join('<span>·</span>');
+}
+
+function addMessage(role, text) {
+  if (empty.parentNode) empty.remove();
+  const wrap = document.createElement('div');
+  wrap.className = 'msg ' + role;
+  const who = document.createElement('div');
+  who.className = 'who';
+  who.textContent = role === 'user' ? 'Siz' : 'Model';
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+  const meta = document.createElement('div');
+  meta.className = 'meta';
+  if (role === 'user') {
+    bubble.textContent = text;
+    wrap.append(who, bubble);
+  } else {
+    bubble.innerHTML = '<span class="cursor"></span>';
+    wrap.append(who, bubble, meta);
+  }
+  thread.appendChild(wrap);
+  if (role === 'user') scrollDown(true);
+  return { wrap, bubble, meta };
+}
+
+function scrollDown(force) {
+  if (force || scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 160) {
+    scroller.scrollTop = scroller.scrollHeight;
+  }
+}
+
+function renderHistory() {
+  if (!history.length) return;
+  empty.remove();
+  for (const m of history) {
+    addMessage(m.role, m.content);
+  }
+}
+
+async function loadModels() {
+  try {
+    const r = await fetch(API + '/api/tags');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const data = await r.json();
+    const list = data.models.slice().sort((a, b) => b.size - a.size);
+    modelSel.innerHTML = '';
+    for (const m of list) {
+      const opt = document.createElement('option');
+      opt.value = m.name;
+      const p = m.details && m.details.parameter_size ? m.details.parameter_size : '';
+      opt.textContent = m.name + (p ? '  ·  ' + p : '') + '  ·  ' + fmtSize(m.size);
+      modelSel.appendChild(opt);
+    }
+    const saved = localStorage.getItem(LS_MODEL);
+    const def = list.find(m => m.name === saved) || list.find(m => m.name.includes('gpt-oss-abliterated')) || list[0];
+    if (def) modelSel.value = def.name;
+    setStatus(true);
+  } catch (e) {
+    setStatus(false);
+    modelSel.innerHTML = '<option>Spark javob bermayapti</option>';
+  }
+}
+
+async function send() {
+  const text = input.value.trim();
+  if (!text || busy) return;
+  const model = modelSel.value;
+  localStorage.setItem(LS_MODEL, model);
+  input.value = '';
+  input.style.height = 'auto';
+  addMessage('user', text);
+  history.push({ role: 'user', content: text });
+  saveHistory();
+
+  busy = true;
+  aborter = new AbortController();
+  sendBtn.disabled = true;
+  sendBtn.textContent = 'To\'xtatish';
+  sendBtn.classList.add('stop');
+
+  const ui = addMessage('assistant', '');
+  let content = '';
+  let thinking = '';
+  let t0 = performance.now();
+  let stats = {};
+  let firstToken = true;
+
+  try {
+    const res = await fetch(API + '/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: aborter.signal,
+      body: JSON.stringify({
+        model,
+        messages: history.slice(-MAX_CONTEXT),
+        stream: true,
+        options: { num_predict: 1024 }
+      })
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let buf = '';
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop();
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        let j;
+        try { j = JSON.parse(line); } catch (e) { continue; }
+        const msg = j.message || {};
+        if (msg.thinking) { thinking += msg.thinking; }
+        if (msg.content) {
+          if (firstToken) {
+            firstToken = false;
+            t0 = performance.now();
+            ui.bubble.innerHTML = '';
+            ui.bubble.innerHTML = '<span class="cursor"></span>';
+            t0 = performance.now();
+          }
+          content += msg.content;
+        }
+        if (j.done) {
+          stats = {
+            tokens: j.eval_count,
+            tps: j.eval_count && j.eval_duration ? j.eval_count / (j.eval_duration / 1e9) : null,
+            seconds: j.total_duration ? j.total_duration / 1e9 : (performance.now() - t0) / 1000
+          };
+        }
+        renderAssistant(ui, thinking, content, stats);
+        scrollDown(false);
+      }
+    }
+    history.push({ role: 'assistant', content });
+    saveHistory();
+  } catch (e) {
+    if (e.name === 'AbortError') {
+      if (content) history.push({ role: 'assistant', content });
+      content += content ? '\n\n_(to\'xtatildi)_' : '_(to\'xtatildi)_';
+    } else {
+      content = content || ('Xato: ' + e.message + '\n\nSpark online ekanini va API manzilini tekshiring.');
+      setStatus(false);
+    }
+    saveHistory();
+  } finally {
+    renderAssistant(ui, thinking, content, stats, true);
+    busy = false;
+    aborter = null;
+    sendBtn.disabled = false;
+    sendBtn.textContent = 'Yuborish';
+    sendBtn.classList.remove('stop');
+    scrollDown(true);
+    input.focus();
+  }
+}
+
+function renderAssistant(ui, thinking, content, stats, final) {
+  const parts = [];
+  if (thinking) {
+    parts.push('<details class="thinking"><summary>Mulohaza</summary><div class="body">' + esc(thinking) + '</div></details>');
+  }
+  parts.push(md(content || '') + (final ? '' : '<span class="cursor"></span>'));
+  ui.bubble.innerHTML = parts.join('');
+  if (stats && (stats.tps || stats.tokens)) statLine(ui.meta, stats);
+}
+
+input.addEventListener('input', () => {
+  input.style.height = 'auto';
+  input.style.height = Math.min(input.scrollHeight, 180) + 'px';
+});
+input.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    send();
+  }
+});
+sendBtn.addEventListener('click', () => {
+  if (busy && aborter) aborter.abort();
+  else send();
+});
+$('clear').addEventListener('click', () => {
+  if (busy && aborter) aborter.abort();
+  history = [];
+  saveHistory();
+  thread.innerHTML = '';
+  thread.appendChild(empty);
+  input.focus();
+});
+
+loadHistory();
+renderHistory();
+loadModels().then(() => { if (history.length) scrollDown(true); });
+input.focus();
+</script>
+</body>
+</html>

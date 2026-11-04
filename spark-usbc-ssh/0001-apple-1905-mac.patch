@@ -1,0 +1,19 @@
+--- cdc_ncm-v7.0.c	2026-11-02 13:56:18
++++ cdc_ncm-patched.c	2026-11-02 13:56:39
+@@ -2009,8 +2009,16 @@
+ 		.driver_info = (unsigned long)&apple_tethering_interface_info,
+ 	},
+ 	{ USB_DEVICE_INTERFACE_NUMBER(0x05ac, 0x12ab, 4),
++		.driver_info = (unsigned long)&apple_private_interface_info,
++	},
++
++	/* Mac (Apple Silicon, USB-C direct networking) */
++	{ USB_DEVICE_INTERFACE_NUMBER(0x05ac, 0x1905, 0),
+ 		.driver_info = (unsigned long)&apple_private_interface_info,
+ 	},
++	{ USB_DEVICE_INTERFACE_NUMBER(0x05ac, 0x1905, 2),
++		.driver_info = (unsigned long)&apple_private_interface_info,
++	},
+ 
+ 	/* Ericsson MBM devices like F5521gw */
+ 	{ .match_flags = USB_DEVICE_ID_MATCH_INT_INFO
